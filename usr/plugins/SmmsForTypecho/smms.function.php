@@ -24,7 +24,6 @@ function plugin_activation_cretable()
     $prefix = $db->getPrefix();
     $type = explode('_', $db->getAdapterName());
     $type = array_pop($type);
-
     if($type == "SQLite"){
         $sql ="SELECT count(*) FROM sqlite_master WHERE type='table' AND name='".MY_NEW_TABLE."';";
         $checkTabel = $db->query($sql);
