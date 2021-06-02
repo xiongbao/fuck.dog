@@ -12,7 +12,17 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 require(__DIR__ . DIRECTORY_SEPARATOR . "Action.php");
 require_once 'pages/metas/Metasmanage.php';
+require_once 'pages/neighbor/Widget_Neighbor.php';
+require_once 'pages/blog/Widget_blog.php';
+require_once 'pages/usercenter/Widget_usercenter.php';
 
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "manage/Widget_CateTag_Edit.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/upload.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/Credits.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/Common.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/Users/Query.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/Credits/List.php");
+require_once(__DIR__ . DIRECTORY_SEPARATOR . "widget/Abstract/Credits.php");
 
 
 class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interface
@@ -57,11 +67,22 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
 //        'url'       =>  array('Typecho_Common', 'safeUrl'),
 //        'slug'      =>  array('Typecho_Common', 'slugName')
 //    );
-        Helper::addRoute('metas', '/metas/', 'Widget_Archive', 'render');
+        Helper::addRoute('metas', '/metas/', 'Widget_Archive@meta', 'render');
+        /** 这里要注意区分不同的 archive 实例 */
+        Helper::addRoute('neighbor_page', '/neighbor/[keyword]/[page:digital]/', 'Widget_Archive@neighbor_page', 'render');
+        Helper::addRoute('neighbor', '/neighbor/[keyword]/', 'Widget_Archive@neighbor', 'render');
+        Helper::addRoute('myblog', '/myblog/', 'Widget_Archive@myblog', 'render');
+        Helper::addRoute('myblog_page', '/myblog/[page:digital]/', 'Widget_Archive@myblog_page', 'render');
+        Helper::addRoute('setting', '/usercenter/setting', 'Widget_Archive@usercenter_settiing', 'render');
+        Helper::addRoute('credits', '/usercenter/credits', 'Widget_Archive@usercenter_credits', 'render');
+
+        // 页面注册
         Typecho_Plugin::factory('Widget_Archive')->handleInit_1000 = array('OneCircle_Plugin','handleInit');
         Typecho_Plugin::factory('Widget_Archive')->handle_1000 = array('OneCircle_Plugin','handle');
-
-
+        // 修改注册用户上传权限
+        Typecho_Plugin::factory('Widget_Upload')->uploadHandle_1000 = array('OneCircle_Plugin','uploadHandle');
+        // 打赏模块
+        Typecho_Plugin::factory('OneCircle.Donate')->Donate = array('OneCircle_Plugin', 'Donate');
 
         // 注册用户权限管理
         Typecho_Plugin::factory('Widget_Register')->register_1000 = array('OneCircle_Plugin', 'zhuce');
@@ -69,6 +90,10 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
         Typecho_Plugin::factory('Widget_Contents_Post_Edit')->write_1000 = array('OneCircle_Plugin', 'fabu');
         Typecho_Plugin::factory('Widget_Contents_Post_Edit')->finishPublish_1000 = array('OneCircle_Plugin', 'fabuwan');
         Typecho_Plugin::factory('admin/footer.php')->end_1000 = array('OneCircle_Plugin', 'footerjs');
+        // 积分
+        Typecho_Plugin::factory('Widget_Login')->loginSucceed_1000 = array('OneCircle_Plugin', 'loginSucceed');
+        Typecho_Plugin::factory('Widget_Feedback')->finishComment_1000 = array('OneCircle_Plugin', 'finishComment');
+
 
         // 添加 关注圈子
         OneCircle_Plugin::userCircleFollowInstall();
@@ -85,12 +110,17 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
         OneCircle_Plugin::userSexsqlInstall();
         // 添加文章额外字段
         OneCircle_Plugin::contentsSqlInstall();
-
+        OneCircle_Plugin::typecho_TableInstall();
+        OneCircle_Plugin::userExtendsqlInstall();
         // register apis
         // action method url : /action/oneapi
 //        Helper::addAction('oneapi', 'OneCircle_Action');
         // route method url : /oneaction
+
         Helper::addRoute("one_action", "/oneaction", "OneCircle_Action", 'route');
+
+
+        Helper::addPanel(3, 'OneCircle/manage/manage-cat-tags.php', '管理圈子分类', '圈子分类', 'administrator'); //editor //contributor
 
     }
 
@@ -105,6 +135,14 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
     {
         Helper::removeRoute('one_action');
         Helper::removeRoute('metas');
+        Helper::removeRoute('neighbor');
+        Helper::removeRoute('neighbor_page');
+        Helper::removeRoute('myblog');
+        Helper::removeRoute('myblog_page');
+        Helper::removeRoute('setting');
+        Helper::removeRoute('credits');
+
+        Helper::removePanel(3, 'OneCircle/manage/manage-cat-tags.php');
     }
 
     /**
@@ -116,6 +154,7 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
      */
     public static function config(Typecho_Widget_Helper_Form $form)
     {
+
         /** 分类名称 */
 //        $name = new Typecho_Widget_Helper_Form_Element_Text('word', NULL, 'Hello World', _t('说点什么'));
 //        $form->addInput($name);
@@ -135,8 +174,41 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
             array('contributor-nb','register-nb'), _t('拓展设置'), _t(''));
         $form->addInput($tuozhan->multiMode());
 
+        //
+        $db = Typecho_Db::get();
+        $select = $db->select('mid')->from('table.metas');
+        $row = $db->fetchRow($select);
+        if (!empty($row)) $umid = $row['mid'];
+        else $umid = 1;
+        $registeruserMid = new Typecho_Widget_Helper_Form_Element_Text('registeruserMid', NULL, _t($umid), _t('用户注册后默认关注哪个分类（int）'));
+        $form->addInput($registeruserMid);
+
         $focususerMid = new Typecho_Widget_Helper_Form_Element_Text('focususerMid', NULL, 1, _t('发布关注消息到哪个分类（int）'));
         $form->addInput($focususerMid);
+
+        $amapJsKey= new Typecho_Widget_Helper_Form_Element_Text('amapJsKey', NULL, '', _t('高德地图 Web端(JS API) key'));
+        $form->addInput($amapJsKey);
+
+        $amapWebKey= new Typecho_Widget_Helper_Form_Element_Text('amapWebKey', NULL, '', _t('高德地图 Web服务 key'));
+        $form->addInput($amapWebKey);
+
+        $allowNoneAdminUpload = new Typecho_Widget_Helper_Form_Element_Radio('allowNoneAdminUpload',array(
+                1 => _t('允许'),
+                0 => _t('不允许')
+        ),0,_t('是否允许非管理员后台上传文件'),_t('此设置仅针对于后台文章编辑有效'));
+        $form->addInput($allowNoneAdminUpload);
+
+        $options = Helper::options();
+        $alipay = $options->themeUrl('assets/img/donate/alipay.jpg','onecircle');
+        $wxpay = $options->themeUrl('assets/img/donate/wxpay.jpg','onecircle');
+
+        //支付宝二维码
+        $AlipayPic = new Typecho_Widget_Helper_Form_Element_Text('AlipayPic', NULL, _t($alipay), _t('支付宝二维码'), _t('打赏中使用的支付宝二维码,建议尺寸小于250×250,且为正方形'));
+        $form->addInput($AlipayPic);
+        //微信二维码
+        $WechatPic = new Typecho_Widget_Helper_Form_Element_Text('WechatPic', NULL, _t($wxpay), _t('微信二维码'), _t('打赏中使用的微信二维码,建议尺寸小于250×250,且为正方形'));
+        $form->addInput($WechatPic);
+
     }
 
     /**
@@ -271,7 +343,8 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
         $obj->widget('Widget_Notice')->set(_t('用户 <strong>%s</strong> 已经成功注册, 密码为 <strong>%s</strong>', $obj->screenName, $wPassword), 'success');
         // add default follow circle
         OneCircle_Plugin::addDefaultTag($obj->user->uid);
-
+        //注册积分
+        Widget_Common::credits('register');
         /*跳转地址(后台)*/
         if (NULL != $obj->request->referer) {
             $obj->response->redirect($obj->request->referer);
@@ -308,6 +381,12 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
 
     public static function fabuwan($con, $obj)
     {
+        // 给文章发布添加高德地图信息
+        $contents = $obj->request->from('name','district','address');
+        $db = Typecho_Db::get();
+        $db->query($db->sql()->where('cid = ?', $obj->cid)->update('table.contents')->rows($contents));
+        // 发步完文章触发积分机制
+        Widget_Common::credits('publish',null,$obj->cid);
         /** 跳转验证后地址 */
         if ($obj->request->referer == 'return') {
             exit;
@@ -358,7 +437,6 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
             return '检测到个性签名字段，插件启用成功';
         } catch (Typecho_Db_Exception $e) {
             $code = $e->getCode();
-            var_dump($e);
             if(('Mysql' == $type && (0 == $code ||1054 == $code || $code == '42S22')) ||
                 ('SQLite' == $type && ('HY000' == $code || 1 == $code))) {
                 try {
@@ -579,8 +657,7 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
                         $db->query("ALTER TABLE `".$prefix."users` ADD `userLifeStatus` VARCHAR( 20 )  DEFAULT '' COMMENT '情感状态';");
 
                     } else if ('SQLite' == $type) {
-                        var_dump("aaa");
-                        $db->query("ALTER TABLE `".$prefix."users` ADD `userSex` INTEGER  DEFAULT 1");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `userSex` INT( 1 )  DEFAULT 1");
                         $db->query("ALTER TABLE `".$prefix."users` ADD `userLifeStatus` VARCHAR( 20 )  DEFAULT ''");
                     } else {
                         throw new Typecho_Plugin_Exception('不支持的数据库类型：'.$type);
@@ -596,6 +673,115 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
             }
             throw new Typecho_Plugin_Exception('数据表检测失败，用户性别插件启用失败。错误号：'.$code);
         }
+    }
+    // 添加用户额外字段
+    public static function userExtendsqlInstall()
+    {
+        $db = Typecho_Db::get();
+        $type = explode('_', $db->getAdapterName());
+        $type = array_pop($type);
+        $prefix = $db->getPrefix();
+        try {
+            $select = $db->select('table.users.location','table.users.credits','table.users.extend','table.users.level')->from('table.users');
+            $db->query($select);
+            return '检测到用户，插件启用成功';
+        } catch (Typecho_Db_Exception $e) {
+            $code = $e->getCode();
+            if(('Mysql' == $type && (0 == $code ||1054 == $code || $code == '42S22')) ||
+                ('SQLite' == $type && ('HY000' == $code || 1 == $code))) {
+                try {
+                    if ('Mysql' == $type) {
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `location` VARCHAR( 120 )  DEFAULT '' COMMENT '用户位置';");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `credits` int(10) unsigned   DEFAULT 0 COMMENT '用户信用';");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `level` int(2) unsigned   DEFAULT 1 COMMENT '用户等级';");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `extend` text COMMENT '用户邀请';");
+
+                    } else if ('SQLite' == $type) {
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `location` VARCHAR( 120 )  DEFAULT '';");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `credits` int(10)  DEFAULT 0 ;");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `level` int(2)  DEFAULT 1;");
+                        $db->query("ALTER TABLE `".$prefix."users` ADD `extend` text ;");
+                    } else {
+                        throw new Typecho_Plugin_Exception('不支持的数据库类型：'.$type);
+                    }
+                    return '插件启用成功';
+                } catch (Typecho_Db_Exception $e) {
+                    $code = $e->getCode();
+                    if(('Mysql' == $type && 1060 == $code) ) {
+                        return '插件启用成功';
+                    }
+                    throw new Typecho_Plugin_Exception('插件启用失败。错误号：'.$code);
+                }
+            }
+            throw new Typecho_Plugin_Exception('数据表检测失败，插件启用失败。错误号：'.$code);
+        }
+    }
+    // 添加 typecho_creditslog
+    public static function typecho_TableInstall(){
+        // create circle follow table
+        $db = Typecho_Db::get();
+        $prefix = $db->getPrefix();
+        $type = explode('_', $db->getAdapterName());
+        $type = array_pop($type);
+        if($type == "SQLite"){
+            $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."creditslog` (
+                                  `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                  `uid` int(10) NOT NULL,
+                                  `srcId` int(10) NOT NULL,
+                                  `created` int(10) NOT NULL DEFAULT '0',
+                                  `type` char(16) NOT NULL DEFAULT 'login',
+                                  `amount` int(10) NOT NULL DEFAULT '0',
+                                  `balance` int(10) NOT NULL DEFAULT '0',
+                                  `remark` varchar(255) NOT NULL DEFAULT ''
+                                );");
+            $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."typecho_messages` (
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `uid` int(10) NOT NULL ,
+                                `type` char(16) NOT NULL DEFAULT 'comment' ,
+                                `srcId` int(10) NOT NULL DEFAULT '0' ,
+                                `created` int(10) NOT NULL DEFAULT '0' ,
+                                `status` tinyint(1) NOT NULL DEFAULT '0'
+                                );");
+            $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."typecho_favorites` (
+                                `fid` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL ,
+                                `uid` int(10) NOT NULL,
+                                `type` char(16) NOT NULL DEFAULT 'post' ,
+                                `srcId` int(10) NOT NULL DEFAULT '0',
+                                `created` int(10) NOT NULL DEFAULT '0'
+                                );");
+        }else{
+            $res= $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."creditslog` (
+                                  `id` int(10) unsigned NOT NULL auto_increment COMMENT '积分日志表主键',
+                                  `uid` int(10) unsigned NOT NULL COMMENT '所属用户',
+                                  `srcId` int(10) unsigned NOT NULL COMMENT '触发的资源ID',
+                                  `created` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '创建时间',
+                                  `type` char(16) NOT NULL DEFAULT 'login' COMMENT '积分类型',
+                                  `amount` int(10) NOT NULL DEFAULT '0' COMMENT '本次积分',
+                                  `balance` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '余额',
+                                  `remark` varchar(255) NOT NULL DEFAULT '' COMMENT '备注',
+                                  PRIMARY KEY (`id`)
+                                );");
+            $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."messages` (
+                                `id` int(10) unsigned NOT NULL auto_increment COMMENT '提醒表主键',
+                                `uid` int(10) unsigned NOT NULL COMMENT '提醒的用户',
+                                `type` char(16) NOT NULL DEFAULT 'comment' COMMENT '提醒类型',
+                                `srcId` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '触发的资源',
+                                `created` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '触发时间',
+                                `status` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT '是否已读',
+                                PRIMARY KEY (`id`),
+                                KEY `uid` (`uid`)
+                                ) ;");
+            $db->query("CREATE TABLE IF NOT EXISTS `" . $prefix ."favorites` (
+                                `fid` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '收藏主键',
+                                `uid` int(10) unsigned NOT NULL COMMENT '所属用户',
+                                `type` char(16) NOT NULL DEFAULT 'post' COMMENT '收藏类型',
+                                `srcId` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '资源ID',
+                                `created` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '收藏时间',
+                                PRIMARY KEY (`fid`)
+                                );");
+        }
+
+
     }
     // 添加文章额外字段
     public static function contentsSqlInstall()
@@ -639,8 +825,9 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
     // add default faned tag , 用户注册的时候添加默认关注
     public static function addDefaultTag($uid){
         $db = Typecho_Db::get();
+        $umid = Typecho_Widget::widget('Widget_Options')->plugin('OneCircle')->registeruserMid;
         $insert = $db->insert('table.circle_follow')
-            ->rows(array('uid' => $uid, 'mid' => 1));
+            ->rows(array('uid' => $uid, 'mid' => $umid));
         $db->query($insert);
     }
     // 添加新的 Page
@@ -659,10 +846,100 @@ class OneCircle_Plugin extends Widget_Archive implements Typecho_Plugin_Interfac
 //        fclose($fp); //关闭打开的文件。
         if ($type == 'metas'){
             Widget_Metasmanage::handle($archive);
+        }elseif ($type == 'neighbor' or $type == 'neighbor_page'){
+            Widget_Neighbor::handle($archive,$select);
+        }elseif ($type == 'myblog' or $type == 'myblog_page'){
+            Widget_blog::handle($archive,$select);
+        }elseif ($type == 'setting'){
+            Widget_usercenter::handleSetting($archive,$select);
+        }elseif ($type == 'credits'){
+            Widget_usercenter::handleCredits($archive,$select);
         }
 
         return true; // 不输出文章 // 查看源码
     }
     // end
+
+
+    // 重写 typecho 后台上传
+    public static function uploadHandle($file)
+    {
+        $user = Typecho_Widget::widget('Widget_User');
+        $user->execute();
+        $allowNoneAdminUpload = Typecho_Widget::widget('Widget_Options')->plugin('OneCircle')->allowNoneAdminUpload;
+        $upload = new Widget_Upload_Extend();
+        if ($allowNoneAdminUpload) return $upload->uploadHandle($file);
+        else{
+            if ($user->pass('editor', true)){
+                return $upload->uploadHandle($file);
+            }else{
+                return false;
+            }
+        }
+    }
+
+    /**
+     * 输出打赏信息
+     * @return string
+     */
+    public static function Donate()
+    {
+        $options = Typecho_Widget::widget('Widget_Options')->plugin('OneCircle');
+        $loading = Helper::options()->themeUrl('assets/img/loading.svg', 'onecircle');
+        $returnHtml = '
+             <div class="support-author text-center">
+                 <button id="support_author" data-toggle="modal" data-target="#donateModal" class="btn btn-pay btn-danger btn-rounded"><svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-wallet-fill" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v2h6a.5.5 0 0 1 .5.5c0 .253.08.644.306.958.207.288.557.542 1.194.542.637 0 .987-.254 1.194-.542.226-.314.306-.705.306-.958a.5.5 0 0 1 .5-.5h6v-2A1.5 1.5 0 0 0 14.5 2h-13z"/><path d="M16 6.5h-5.551a2.678 2.678 0 0 1-.443 1.042C9.613 8.088 8.963 8.5 8 8.5c-.963 0-1.613-.412-2.006-.958A2.679 2.679 0 0 1 5.551 6.5H0v6A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-6z"/></svg><span>&nbsp;' . _t("赞赏") . '</span></button>
+             </div>
+             <div id="donateModal" class="modal fade bs-example-modal-sm" tabindex="-1" role="dialog" data-backdrop="" aria-labelledby="mySmallModalLabel">
+                 <div class="modal-dialog modal-sm  modal-dialog-centered" role="document">
+                     <div class="modal-content">
+                         <div class="modal-header">
+                             <h6 class="modal-title">' . _t("赞赏作者") . '</h6>
+                             <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                         </div>
+                         <div class="modal-body">
+                             <p class="text-center article__reward"> <strong class="article__reward-text">' . _t("扫一扫支付") . '</strong> </p>
+                             <div class="tab-content">';
+        if ($options->AlipayPic != null) {
+            $returnHtml .= '<img aria-labelledby="alipay-tab" class="lazyload pay-img tab-pane fade active show" id="alipay_author" role="tabpanel" src="' . $loading . '" data-src="' . $options->AlipayPic . '" />';
+        }
+        if ($options->WechatPic != null) {
+            $returnHtml .= '<img aria-labelledby="wechatpay-tab" class="lazyload pay-img tab-pane fade" id="wechatpay_author" role="tabpanel" src="' . $loading . '" data-src="' . $options->WechatPic . '" />';
+        }
+
+        $returnHtml .= '</div>
+                             <div class="article__reward-border mb20 mt10"></div><div class="text-center">
+                             <ul class="text-center nav d-block" role="tablist">';
+        if ($options->AlipayPic != null) {
+            $returnHtml .= '<li class="pay-button nav-item" role="presentation" class="active"><button href="#alipay_author" id="alipay-tab" aria-controls="alipay_author" role="tab" data-toggle="tab" aria-selected="true" class="btn m-b-xs m-r-xs btn-blue"><svg t="1606310341446" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2836" width="1em" height="1em"><path d="M233.6 576c-12.8 9.6-25.6 22.4-28.8 41.6-6.4 25.6 0 54.4 22.4 80 28.8 28.8 70.4 35.2 89.6 38.4 51.2 3.2 105.6-22.4 144-51.2 16-9.6 44.8-35.2 70.4-67.2-57.6-28.8-131.2-64-208-60.8-38.4 0-67.2 6.4-89.6 19.2zM976 710.4c25.6-60.8 41.6-128 41.6-198.4C1017.6 233.6 790.4 6.4 512 6.4S6.4 233.6 6.4 512s227.2 505.6 505.6 505.6c166.4 0 316.8-83.2 409.6-208-86.4-41.6-230.4-115.2-316.8-156.8-41.6 48-102.4 96-172.8 115.2-44.8 12.8-83.2 19.2-124.8 9.6s-70.4-28.8-89.6-48c-9.6-9.6-19.2-22.4-25.6-38.4v3.2s-3.2-6.4-6.4-19.2c0-6.4-3.2-12.8-3.2-19.2v-35.2c3.2-19.2 12.8-44.8 35.2-64 48-48 112-51.2 147.2-48 48 0 137.6 22.4 208 48 19.2-41.6 32-89.6 41.6-118.4H307.2v-32H464v-64H275.2v-32H464v-64c0-16 3.2-22.4 16-22.4h73.6v83.2h204.8v32H553.6v64h163.2s-16 92.8-67.2 182.4C761.6 624 921.6 688 976 710.4z" fill="#ffffff" p-id="2837" data-spm-anchor-id="a313x.7781069.0.i3" class="selected"></path></svg><span>&nbsp;' . _t("支付宝支付") . '</span></button>
+                                 </li>';
+        }
+        if ($options->WechatPic != null) {
+            $returnHtml .= '<li class="pay-button nav-item" role="presentation"><button href="#wechatpay_author" id="wechatpay-tab" aria-controls="wechatpay_author" role="tab" data-toggle="tab" aria-selected="false" class="btn m-b-xs btn-always-success"><svg t="1606304793200" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4257" width="1em" height="1em"><path d="M390.4 615.5c-4.1 2.1-8.3 3.1-13.4 3.1-11.4 0-20.7-6.2-25.9-15.5L349 599l-81.7-178c-1-2.1-1-4.1-1-6.2 0-8.3 6.2-14.5 14.5-14.5 3.1 0 6.2 1 9.3 3.1l96.2 68.3c7.2 4.1 15.5 7.2 24.8 7.2 5.2 0 10.3-1 15.5-3.1l451.1-200.7C797 179.9 663.6 117.8 512.5 117.8c-246.2 0-446.9 166.6-446.9 372.4 0 111.7 60 213.1 154.1 281.4 7.2 5.2 12.4 14.5 12.4 23.8 0 3.1-1 6.2-2.1 9.3-7.2 27.9-19.7 73.5-19.7 75.5-1 3.1-2.1 7.2-2.1 11.4 0 8.3 6.2 14.5 14.5 14.5 3.1 0 6.2-1 8.3-3.1l97.2-56.9c7.2-4.1 15.5-7.2 23.8-7.2 4.1 0 9.3 1 13.4 2.1 45.5 13.4 95.2 20.7 145.9 20.7 246.2 0 446.9-166.6 446.9-372.4 0-62.1-18.6-121-50.7-172.8l-514 296.9-3.1 2.1z" fill="#ffffff" p-id="4258" data-spm-anchor-id="a313x.7781069.0.i2" class="selected"></path></svg><span>&nbsp;' . _t("微信支付") . '</span></button>
+                                 </li>';
+        }
+
+        $returnHtml .= '</ul></div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        ';
+
+        return $returnHtml;
+    }
+    /**
+     * 积分
+     */
+    public static function loginSucceed($user, $name, $password, $remember){
+        $type = 'login';
+        if($user->have()){
+            $uid=null;$srcId = null;
+            Typecho_Widget::widget('Widget_Users_Credits')->setUserCredits($user->uid,$type,$srcId);
+        }
+    }
+    public static function finishComment($archive){
+        Widget_Common::credits('reply',null,$archive->coid);
+    }
 }
 

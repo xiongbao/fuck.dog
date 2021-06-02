@@ -9,16 +9,11 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @version 2.0.0
  * @link https://blog.gogobody.cn
  */
-class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interface_Do
+class OneCircle_Action extends Widget_Abstract_Contents
 {
     public function __construct($request, $response, $params = NULL)
     {
         parent::__construct($request, $response, $params);
-    }
-
-    public function execute()
-    {
-        //Do nothing
     }
 
     // do /oneaction  apis
@@ -41,7 +36,11 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
                 }
                 $url = $request->get('url');
                 $html = $this->getUrlContent($url);
-                print_r($this->getDescriptionFromContent($html, 120));
+                $this->response->throwJson(array(
+                    "msg" => "",
+                    "code" => 1,
+                    "data" => $this->getDescriptionFromContent($html, 120)
+                ));
                 break;
             // 用于主页前台发布
             case "getsecuritytoken":
@@ -56,7 +55,11 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
                 if ($request->isPost()) {
 
                     $security = $this->widget('Widget_Security');
-                    echo $security->getToken($this->request->getReferer());
+                    $this->response->throwJson(array(
+                        "msg" => "",
+                        "code" => 1,
+                        "data" => $security->getToken($this->request->getReferer())
+                    ));
                     break;
 
                 }
@@ -69,14 +72,11 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
                     $url = $request->get('url');
                     $path = Typecho_Router::url('do', array('action' => 'login', 'widget' => 'Login'),
                         Typecho_Common::url('index.php', $this->rootUrl));
-                    echo $this->getTokenUrl($path, $url);
-                    break;
-                }
-                echo 'error';
-                break;
-            case "getloginaction":
-                if ($request->isPost()) {
-                    echo Helper::options()->loginAction();
+                    $this->response->throwJson(array(
+                        "msg" => "",
+                        "code" => 1,
+                        "data" => $this->getTokenUrl($path, $url)
+                    ));
                     break;
                 }
                 echo 'error';
@@ -87,6 +87,23 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
                     break;
                 }
                 echo "error method";
+                break;
+            case "amapKey":
+                // check login and permission
+                if (!$this->checkPermission($this->user->group)) {
+                    $this->response->throwJson(array(
+                        "msg" => "not login",
+                        "code" => 0
+                    ));
+                    return false;
+                }
+                $this->response->throwJson(array(
+                    "status" => 1,
+                    "data" => array(
+                        "jskey" => Typecho_Widget::widget('Widget_Options')->plugin('OneCircle')->amapJsKey,
+                        "webkey" => Typecho_Widget::widget('Widget_Options')->plugin('OneCircle')->amapWebKey
+                    )
+                ));
                 break;
             default:
                 echo 'unhandled method';
@@ -129,8 +146,9 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
     function getDescriptionFromContent($content, $count)
     {
         preg_match("/<title>(.*?)<\/title>/s", $content, $title);
-        if (count($title) == 0) {
+        if (count($title) == 0 || empty(trim($title[1]))) {
             preg_match('/<meta +name *=["\']?description["\']? *content=["\']?([^<>"]+)["\']?/i', $content, $res);
+
             if (count($res) == 0) { //match failed
                 $content = preg_replace("@<script(.*?)</script>@is", "", $content);
                 $content = preg_replace("@<iframe(.*?)</iframe>@is", "", $content);
@@ -147,7 +165,6 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
             $content = $title[1];
         }
         $content = trim($content);
-
         $res = mb_substr($content, 0, $count, 'UTF-8');
         if (mb_strlen($content, 'UTF-8') > $count) {
             $res = $res . "...";
@@ -194,13 +211,6 @@ class OneCircle_Action extends Widget_Abstract_Contents implements Widget_Interf
         }
         return false;
     }
-
-    // do /action/oneapi apis
-    public function action()
-    {
-
-    }
-
 
 }
 
