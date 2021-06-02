@@ -1,10 +1,10 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php $this->need('includes/header.php');
 ?>
-<div class="container-lg animate__animated animate__fadeIn" id="pjax-container">
-    <div class="row">
-        <?php $this->need('includes/nav.php'); ?>
-        <div class="col-xl-7 col-md-7 col-12 article-container">
+<?php $this->need('includes/body-layout.php');?>
+<div class="hbox hbox-auto-xs hbox-auto-sm index">
+    <div class="col center-part">
+        <div class="article-container">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="<?php $this->options->siteUrl(); ?>">首页</a></li>
@@ -41,14 +41,16 @@
                 <!--     元数据-->
                 <div class="article-meta">
                     <span class="article-category">
-                        <?php $this->category(' '); ?>
+                        <?php if (empty($this->category)) _e("未选择"); else $this->category(','); ?>
                     </span>
                     <time class="create-time" datetime="<?php $this->date('c'); ?>"><?php $this->date(); ?></time>
                     <?php $agree = $this->hidden ? array('agree' => 0, 'recording' => true) : utils::agreeNum($this->cid); ?>
                     <div class="article-data"><span><?php utils::getPostView($this); ?>阅读 <?php echo $agree['agree']; ?>点赞</span>
                     </div>
                 </div>
-                <!--     content-->
+                <div style="width:100%;overflow:hidden;max-height: 90px;"><?php _e($this->options->article_top_ads);?></div>
+
+                    <!--     content-->
                 <div class="article-content">
                     <?php if ($this->hidden || $this->titleshow): ?>
                         <form action="<?php echo Typecho_Widget::widget('Widget_Security')->getTokenUrl($this->permalink); ?>"
@@ -87,8 +89,8 @@
                             <circle cx="10" cy="10" r="10" fill="#03A9F5"></circle>
                             <circle cx="10" cy="10" r="5" fill="#A0E3FE"></circle>
                         </svg>
-                        <?php _e($this->categories[0]['name'])?>
-                        </a>
+                        <?php if(empty($this->categories[0]['name'])) _e("未选择");else _e($this->categories[0]['name']);?>
+                    </a>
                     <div class="sc-AxjAm sc-AxirZ kVrFww">
                         <div class="sc-AxjAm sc-AxirZ  IsObJ" >
                             <div class="sc-AxjAm sc-AxirZ dEkSi agree-btn" style="transform: none;" id="agree-btn" data-cid="<?php $this->cid(); ?>">
@@ -128,7 +130,9 @@
                     </div>
                 </div>
             </article>
-            <!--            目录树-->
+            <div style="width:100%;overflow:hidden;max-height: 90px;"><?php _e($this->options->article_bottom_ads);?></div>
+
+                <!--            目录树-->
             <section class="col-12 col-md-4 col-xl-3 article-catalog animate__animated animate__bounceInRight" id="tocTree">
                 <h3 class="article-catalog-title">
                     <?php _e('目录'); ?>
@@ -143,8 +147,8 @@
             <?php $this->need('includes/comments.php'); ?>
 
         </div>
-        <?php $this->need('includes/right.php'); ?>
     </div>
+    <?php $this->need('includes/right.php'); ?>
     <!-- Modal -->
     <div class="modal fade" id="repostModal" tabindex="-1" aria-labelledby="repostModalLabel" data-backdrop="false" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -174,4 +178,6 @@
         </div>
     </div>
 </div>
+<?php $this->need('includes/body-layout-end.php');?>
+
 <?php $this->need('includes/footer.php'); ?>

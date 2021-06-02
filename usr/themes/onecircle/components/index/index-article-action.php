@@ -3,7 +3,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 /**
  * 主页 显示 图文 default
  */
-$row = utils::getPostActions($this);
 ?>
 <!-- action-->
 <div class="content-action">
@@ -11,8 +10,7 @@ $row = utils::getPostActions($this);
     <div class="topic-container">
         <span class="topic-container-items" onclick="event.stopPropagation()">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" class="container-svg"><circle cx="10" cy="10" r="10" fill="#03A9F5"></circle><circle cx="10" cy="10" r="5" fill="#A0E3FE"></circle></svg>
-        <?php $this->category(','); ?>
-
+        <?php if (empty($this->category)) _e("未选择"); else $this->category(','); ?>
         </span>
     </div>
 
@@ -28,7 +26,7 @@ $row = utils::getPostActions($this);
                           <path fill-rule="evenodd"
                                 d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
                     </svg>
-                    <?php echo $row['views'] ?>
+                    <?php echo $GLOBALS['actionRow']['views'] ?>
                 </span>
             </button>
         </div>
@@ -61,11 +59,11 @@ $row = utils::getPostActions($this);
                 </span>
             </button>
         </div>
-        <div class="p-2">
+        <div class="p-2 post-address-container">
             <button class="button post-address">
                 <span class="post-icon" style="display: flex;align-items: center;">
-                    <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-geo-alt" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.166 8.94C12.696 7.867 13 6.862 13 6A5 5 0 0 0 3 6c0 .862.305 1.867.834 2.94.524 1.062 1.234 2.12 1.96 3.07A31.481 31.481 0 0 0 8 14.58l.208-.22a31.493 31.493 0 0 0 1.998-2.35c.726-.95 1.436-2.008 1.96-3.07zM8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10z"/><path fill-rule="evenodd" d="M8 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
-                    <?php echo $row['name'] ?>
+                    <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-clock" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm8-7A8 8 0 1 1 0 8a8 8 0 0 1 16 0z"/><path fill-rule="evenodd" d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/></svg>
+                    <time><?php echo formatTime($this->created); ?></time>
                 </span>
             </button>
         </div>

@@ -1,15 +1,15 @@
 <?php
 /**
  * 一个圈子主题
- *
+ * OneCircle theme，也许是 typecho 第一个社交圈子主题
  * @package OneCircle
- * @author gogobody
- * @version 2.8
- * @link https://blog.gogobody.cn
+ * @author gogobody <a href="https://www.ijkxs.com">即刻学术</a>
+ * @version 3.06
+ * @link check https://github.com/gogobody/onecircle
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
-
+$loading = Helper::options()->defaultLoadingUrl();
 // recommend page
 $tArr = utils::parseUrlQuery(utils::GetCurUrl());
 if (count($tArr) == 0) {
@@ -32,54 +32,75 @@ if ($this->user->hasLogin()){
 }
 //Typecho_Widget::widget('Widget_Users_Admin')->to($users);
 $this->need('includes/header.php');
-
+// below is body content
 ?>
 
-<div class="container-lg animate__animated animate__fadeIn" id="pjax-container">
-    <div class="row">
-        <?php $this->need('includes/nav.php'); ?>
-        <div class="col-xl-7 col-md-7 col-12 main-content">
-            <?php if ($this->user->hasLogin() && !$recommend && checkIndexInputPermission($this->user->group)): //判断是否登录 ?>
-                <?php $this->need('components/index/index-input.php'); ?>
-            <?php endif; ?>
+<?php $this->need('includes/body-layout.php');?>
+    <div class="hbox hbox-auto-xs hbox-auto-sm index">
+        <div class="col center-part">
+            <div class="main-content">
+                <?php if ($this->user->hasLogin() && !$recommend && checkIndexInputPermission($this->user->group)): //判断是否登录 ?>
+                    <?php $this->need('components/index/index-input.php'); ?>
+                <?php endif; ?>
 
-            <?php if($recommend):?>
-            <!-- 圈友日记 -->
-            <div class="diary-content">
-                <a href="<?php _e(Typecho_Common::url('/metas',$this->options->index));?>">
-                <div class="mycicle-title">
-                    <h2>圈友日记</h2>
-                    <a href="<?php _e(Typecho_Common::url('/metas',$this->options->index));?>"><h2>更多</h2></a>
+                <?php if($recommend):?>
+                <!-- 圈友日记 -->
+                <div class="diary-content">
+                    <a href="<?php $meta_url = Typecho_Common::url('/metas',$this->options->index);_e($meta_url);?>">
+                    <div class="mycicle-title">
+                        <h2>圈友日记</h2>
+                        <a href="<?php _e($meta_url);?>"><h2>更多</h2></a>
+                    </div>
+                    <div class="circle-diary">
+                        <?php $imgs = getRandRecommendImgs(8); foreach ($imgs as $rimg):?>
+                            <?php $archive_ = null;
+                            $this->widget('Widget_Archive@_'.$rimg['cid'], 'pageSize=1&type=post', 'cid='.$rimg['cid'])->to($archive_);?>
+                            <a href="<?php _e($archive_->permalink()); ?>" class="diary-item">
+                                <div class="circle-diary-bg">
+                                    <div class="diary-img">
+                                        <img src="<?php _t($loading)?>" data-src="<? _e($rimg['img']); ?>" class="lazyload">
+                                    </div>
+                                    <div class="circle-diary-bottom">
+                                        <div class="circle-diary-avatar"><img class="img-circle img-thumbnail"
+                                                                              src="<? _e(getUserV2exAvatar($rimg['email'], $rimg['userAvatar'])); ?>">
+                                        </div>
+                                        <div class="circle-diary-name"><? _e($rimg['screenName']); ?></div>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach;?>
+                        <?php if(count($imgs) == 0): ?>
+                            <span class="text-center"> 这里空空如也~ </span>
+                        <?php endif;?>
+                    </div>
+                    </a>
                 </div>
-                <div class="circle-diary">
-                    <?php $imgs = getRandRecommendImgs(8); foreach ($imgs as $rimg):?>
-                        <?php $this->widget('Widget_Archive@_'.$rimg['cid'], 'pageSize=1&type=post', 'cid='.$rimg['cid'])->to($archive_);?>
-                        <a href="<?php _e($archive_->permalink()); ?>" class="circle-diary-bg" style="background-image: url('<?_e($rimg['img']);?>')">
-                            <div class="circle-diary-bottom">
-                                <div class="circle-diary-avatar"><img class="img-circle img-thumbnail" src="<?_e(getUserV2exAvatar($rimg['email'],$rimg['userAvatar']));?>"></div>
-                                <div class="circle-diary-name"><?_e($rimg['screenName']);?></div>
-                            </div>
-                        </a>
-                    <?php endforeach;?>
+                <?php endif; ?>
+                <div style="width:100%;overflow:hidden;max-height: 90px;"><?php _e($this->options->index_middle_ads);?></div>
+                <div class="list">
+                    <?php $cnt = 0; ?>
+                    <?php while ($this->next()): ?>
+                        <?php $cnt = $cnt+1;$this->need('components/index/article-content.php'); ?>
+                        <?php if ($cnt%7 ==0):?>
+                        <div style="width:100%;overflow:hidden;max-height: 90px;"><?php _e($this->options->list_middle_ads);?></div>
+                        <?php endif;?>
+                    <?php endwhile; ?>
                 </div>
-                </a>
+                <!--分页-->
+                <?php $this->need('includes/post-pagination.php');?>
             </div>
-            <?php endif; ?>
-            <div class="list">
-                <?php while ($this->next()): ?>
-                    <?php $this->need('components/index/article-content.php'); ?>
-                <?php endwhile; ?>
-            </div>
-            <!--分页-->
-            <?php $this->need('includes/pagination.php');?>
         </div>
         <?php
-        if (!$recommend) {
-            $this->need('includes/right.php');
-        } else {
-            $this->need('components/recommend/recommend-right.php');
-        }
+            if (!$recommend) {
+                $this->need('includes/right.php');
+            } else {
+                $this->need('components/recommend/recommend-right.php');
+            }
         ?>
     </div>
-</div>
+<?php $this->need('includes/body-layout-end.php');?>
+
+
 <?php $this->need('includes/footer.php'); ?>
+
+

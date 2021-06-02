@@ -3,7 +3,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 /**
  * 主页 显示 图文 default
  */
-$arr = getGirdPics($this)
+$arr = getGirdPics($this);
 ?>
 <div class="row">
 
@@ -23,7 +23,7 @@ $arr = getGirdPics($this)
     <?php if ($this->fields->banner && $this->fields->banner != ''): ?>
         <div class="post-cover col-xl-12">
             <div class="post-cover-inner">
-                <a class='post-cover-img-more' data-fancybox='gallery' href='<?php echo $this->fields->banner; ?>'>
+                <a data-fancybox='gallery' href='<?php echo $this->fields->banner; ?>'>
                     <img src="<?php echo $this->fields->banner; ?>" class="post-cover-img" alt="cover">
                 </a>
             </div>
